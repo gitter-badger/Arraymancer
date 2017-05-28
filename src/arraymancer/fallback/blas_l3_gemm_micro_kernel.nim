@@ -15,62 +15,61 @@
 template gemm_micro_kernelT[T](
             kc: int,
             alpha: T,
-            A: typed, offA: int,
-            B: typed, offB: int,
+            pA: typed,
+            pB: typed,
             beta: T,
-            C: typed,
-            offC: int,
+            pC: typed,
             incRowC, incColC: int): untyped =
   var AB: array[MR*NR, T]
-  var voffA = offA
-  var voffB = offB
+  
+  var A = pA
+  var B = pB
+  var C = pC
 
   ## Compute A*B
-  for l in 0 ..< kc:
+  for _ in 0 ..< kc:
     for j in 0 ..< NR:
       for i in 0 .. <MR:
-        AB[i + j*MR] += A[i + voffA] * B[j + voffB]
-    voffA += MR
-    voffB += NR
+        AB[i + j*MR] += A[i] * B[j]
+    A += MR
+    B += NR
 
   ## C <- beta * C
   if beta == 0.T:
     for j in 0 ..< NR:
       for i in 0 ..< MR:
-        C[i*incRowC + j*incColC + offC] = 0.T
+        C[i*incRowC + j*incColC] = 0.T ## Todo use a pointer for the sequences as well
   elif beta != 1.T:
     for j in 0 ..< NR:
       for i in 0 ..< MR:
-        C[i*incRowC + j*incColC + offC] *= beta
+        C[i*incRowC + j*incColC] *= beta
 
   ## C <- C + alpha*AB, alpha !=0
   if alpha == 1.T:
     for j in 0 ..< NR:
       for i in 0 ..< MR:
-        C[i*incRowC + j*incColC + offC] += AB[i + j*MR]
+        C[i*incRowC + j*incColC] += AB[i + j*MR]
   else:
     for j in 0 ..< NR:
       for i in 0 ..< MR:
-        C[i*incRowC + j*incColC + offC] += alpha*AB[i + j*MR]
+        C[i*incRowC + j*incColC] += alpha*AB[i + j*MR]
 
 proc gemm_micro_kernel[T](kc: int,
                           alpha: T,
-                          A: ref array[MCKC, T], offA: int,
-                          B: ref array[KCNC, T], offB: int,
+                          A: BufferPtr[MCKC, T],
+                          B: BufferPtr[KCNC, T],
                           beta: T,
-                          C: var ref array[MRNR, T],
-                          offC: int,
-                          incRowC, incColC: int)
-                          {.noSideEffect.} =
-  gemm_micro_kernelT(kc, alpha, A, offA, B, offB, beta, C, offC, incRowC, incColc)
+                          C: BufferPtr[MRNR, T],
+                          incRowC, incColC: int
+                          ) = # {.noSideEffect.} =
+  gemm_micro_kernelT(kc, alpha, A, B, beta, C, incRowC, incColc)
 
 proc gemm_micro_kernel[T](kc: int,
                           alpha: T,
-                          A: ref array[MCKC, T], offA: int,
-                          B: ref array[KCNC, T], offB: int,
+                          A: BufferPtr[MCKC, T],
+                          B: BufferPtr[KCNC, T],
                           beta: T,
-                          C: var seq[T],
-                          offC: int,
-                          incRowC, incColC: int)
-                          {.noSideEffect.} =
-  gemm_micro_kernelT(kc, alpha, A, offA, B, offB, beta, C, offC, incRowC, incColc)
+                          C: SeqPtr[T],
+                          incRowC, incColC: int
+                          ) = # {.noSideEffect.} =
+  gemm_micro_kernelT(kc, alpha, A, B, beta, C, incRowC, incColc)

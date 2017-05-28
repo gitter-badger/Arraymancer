@@ -33,6 +33,8 @@
 # - Is there a way to get L1/L2 cache size at compile-time
 # - Is there a way to get number of registers at compile-time
 
+# Best numbers depend on
+# L1, L2, L3 cache and register size
 const MC = 384
 const KC = 384
 const NC = 4096
@@ -44,16 +46,11 @@ const MCKC = MC*KC
 const KCNC = KC*NC
 const MRNR = MR*NR
 
-
+include ./blas_l3_gemm_data_structure.nim
 include ./blas_l3_gemm_packing
-include ./blas_l3_gemm_axpy_scal
+include ./blas_l3_gemm_aux
 include ./blas_l3_gemm_micro_kernel
 include ./blas_l3_gemm_macro_kernel
-
-proc newBufferArray[T: SomeNumber](N: static[int], typ: typedesc[T]): ref array[N, T]  {.noSideEffect.} =
-  new result
-  for i in 0 ..< N:
-    result[i] = 0.T
 
 # We use T: int so that it is easy to change to float to benchmark against OpenBLAS/MKL/BLIS
 proc gemm_nn[T](m, n, k: int,
@@ -64,7 +61,7 @@ proc gemm_nn[T](m, n, k: int,
                 incRowB, incColB: int,
                 beta: T,
                 C: var seq[T], offC: int,
-                incRowC, incColc: int)  {.noSideEffect.} =
+                incRowC, incColC: int) = # {.noSideEffect.} =
 
   let
     mb = (m + MC - 1) div MC
@@ -78,35 +75,41 @@ proc gemm_nn[T](m, n, k: int,
   var mc, nc, kc: int
   var tmp_beta: T
 
-  var buffer_A = newBufferArray(MCKC, T)
-  var buffer_B = newBufferArray(KCNC, T)
-  var buffer_C = newBufferArray(MRNR, T)
+  var (buffer_A, pbuf_A) = newBufferArrayPtr(MCKC, T)
+  var (buffer_B, pbuf_B) = newBufferArrayPtr(KCNC, T)
+  var (buffer_C, pbuf_C) = newBufferArrayPtr(MRNR, T)
+
+  var pA = A.to_ptr + offA
+  var pB = B.to_ptr + offB
+  var pC = C.to_ptr + offC
+
+  if alpha == 0.T or k == 0:
+    gescal(m, n, beta, pC, incRowC, incColC)
+    return
 
   for j in 0 ..< nb:
     nc =  if (j != nb-1 or mod_nc == 0): NC
           else: mod_nc
 
-    for l in 0 ..< kb:
-      kc       =  if (l != kb-1 or mod_kc == 0): KC
+    for k in 0 ..< kb:
+      kc       =  if (k != kb-1 or mod_kc == 0): KC
                   else: mod_kc
-      tmp_beta =  if l == 0: beta
+      tmp_beta =  if k == 0: beta
                   else: 1.T
-
       pack_dim( nc, kc,
-                B, l*KC*incRowB + j*NC*incColB + offB,
+                pB + k*KC*incRowB + j*NC*incColB,
                 incColB, incRowB, NR,
-                buffer_B)
-
+                pbuf_B)
       for i in 0 ..< mb:
         mc = if (i != mb-1 or mod_mc == 0): MC
              else: mod_mc
 
         pack_dim( mc, kc,
-                  A, i*MC*incRowA+l*KC*incColA + offA,
+                  pA + i*MC*incRowA+k*KC*incColA,
                   incRowA, incColA, MR,
-                  buffer_A)
+                  pbuf_A)
 
         gemm_macro_kernel(mc, nc, kc,
                           alpha, tmp_beta,
-                          C, i*MC*incRowC + j*NC*incColC + offC,
-                          incRowC, incColC, buffer_A, buffer_B, buffer_C)
+                          pC + i*MC*incRowC + j*NC*incColC,
+                          incRowC, incColC, pbuf_A, pbuf_B, pbuf_C)

@@ -15,31 +15,34 @@
 ## Compute Y += alpha * X
 proc geaxpy[T]( m, n: int,
                 alpha: T,
-                X: ref array[MRNR, T],
+                X: BufferPtr[MRNR, T],
                 incRowX, incColX: int,
-                Y: var seq[T], offY: int,
+                pY: SeqPtr[T],
                 incRowY, incColY: int) =
+
+  var Y = pY
 
   if alpha != 1.T:
     for j in 0 ..< n:
       for i in 0 ..< m:
-        Y[i*incRowY + j*incColY + offY] += alpha * X[i*incRowX + j*incColX]
+        Y[i*incRowY + j*incColY] += alpha * X[i*incRowX + j*incColX]
   else:
     for j in 0 ..< n:
       for i in 0 ..< m:
-        Y[i*incRowY + j*incColY + offY] += X[i*incRowX + j*incColX]
+        Y[i*incRowY + j*incColY] += X[i*incRowX + j*incColX]
 
 ## Compute X *= alpha
 proc gescal[T]( m, n: int,
                 alpha: T,
-                X: var seq[T], offX: int,
+                pX: SeqPtr[T],
                 incRowX, incColX: int) =
+  var X = pX
 
   if alpha != 0.T:
     for j in 0 ..< n:
       for i in 0 ..< m:
-        X[i*incRowX + j*incColX + offX] *= alpha
+        X[i*incRowX + j*incColX] *= alpha
   else:
     for j in 0 ..< n:
       for i in 0 ..< m:
-        X[i*incRowX + j*incColX + offX] = 0
+        X[i*incRowX + j*incColX] = 0
