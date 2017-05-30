@@ -21,10 +21,11 @@ template gemm_micro_kernelT[T](
             pC: typed,
             incRowC, incColC: int): untyped =
   var AB: array[MR*NR, T]
-  
-  var A = pA
-  var B = pB
-  var C = pC
+
+  var
+    A = pA
+    B = pB
+    C = pC
 
   ## Compute A*B
   for _ in 0 ..< kc:
@@ -56,20 +57,10 @@ template gemm_micro_kernelT[T](
 
 proc gemm_micro_kernel[T](kc: int,
                           alpha: T,
-                          A: BufferPtr[MCKC, T],
-                          B: BufferPtr[KCNC, T],
+                          A: ptr T,
+                          B: ptr T,
                           beta: T,
-                          C: BufferPtr[MRNR, T],
-                          incRowC, incColC: int
-                          ) = # {.noSideEffect.} =
-  gemm_micro_kernelT(kc, alpha, A, B, beta, C, incRowC, incColc)
-
-proc gemm_micro_kernel[T](kc: int,
-                          alpha: T,
-                          A: BufferPtr[MCKC, T],
-                          B: BufferPtr[KCNC, T],
-                          beta: T,
-                          C: SeqPtr[T],
+                          C: ptr T,
                           incRowC, incColC: int
                           ) = # {.noSideEffect.} =
   gemm_micro_kernelT(kc, alpha, A, B, beta, C, incRowC, incColc)

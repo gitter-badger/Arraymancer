@@ -290,10 +290,10 @@ proc `*`*[T: SomeInteger](a, b: Tensor[Cpu,T]): Tensor[Cpu,T] = # {.noSideEffect
 
   gemm_nn(M, N, K,
            1.T,
-           a.data, a.offset,
+           get_offset_ptr(a),
            a.strides[0], a.strides[1],
-           b.data, b.offset,
+           get_offset_ptr(b),
            b.strides[0], b.strides[1],
            0.T,
-           result.data, 0,
+           get_data_ptr(result),
            N, 1)

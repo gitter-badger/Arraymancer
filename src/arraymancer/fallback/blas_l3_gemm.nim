@@ -35,12 +35,12 @@
 
 # Best numbers depend on
 # L1, L2, L3 cache and register size
-const MC = 384
-const KC = 384
+const MC = 96
+const KC = 256
 const NC = 4096
 
-const MR = 4
-const NR = 4
+const MR = 2
+const NR = 2
 
 const MCKC = MC*KC
 const KCNC = KC*NC
@@ -52,15 +52,15 @@ include ./blas_l3_gemm_aux
 include ./blas_l3_gemm_micro_kernel
 include ./blas_l3_gemm_macro_kernel
 
-# We use T: int so that it is easy to change to float to benchmark against OpenBLAS/MKL/BLIS
+
 proc gemm_nn[T](m, n, k: int,
                 alpha: T,
-                A: seq[T], offA: int,
+                A: ptr T,
                 incRowA, incColA: int,
-                B: seq[T], offB: int,
+                B: ptr T,
                 incRowB, incColB: int,
                 beta: T,
-                C: var seq[T], offC: int,
+                C: ptr T,
                 incRowC, incColC: int) = # {.noSideEffect.} =
 
   let
@@ -75,16 +75,16 @@ proc gemm_nn[T](m, n, k: int,
   var mc, nc, kc: int
   var tmp_beta: T
 
-  var (buffer_A, pbuf_A) = newBufferArrayPtr(MCKC, T)
-  var (buffer_B, pbuf_B) = newBufferArrayPtr(KCNC, T)
-  var (buffer_C, pbuf_C) = newBufferArrayPtr(MRNR, T)
-
-  var pA = A.to_ptr + offA
-  var pB = B.to_ptr + offB
-  var pC = C.to_ptr + offC
+  var
+    buffer_A = newRefArray(MCKC, T)
+    buffer_B = newRefArray(KCNC, T)
+    buffer_C = newRefArray(MRNR, T)
+    pbA = buffer_A.get_data_ptr
+    pbB = buffer_B.get_data_ptr
+    pbC = buffer_C.get_data_ptr
 
   if alpha == 0.T or k == 0:
-    gescal(m, n, beta, pC, incRowC, incColC)
+    gescal(m, n, beta, C, incRowC, incColC)
     return
 
   for j in 0 ..< nb:
@@ -97,19 +97,18 @@ proc gemm_nn[T](m, n, k: int,
       tmp_beta =  if k == 0: beta
                   else: 1.T
       pack_dim( nc, kc,
-                pB + k*KC*incRowB + j*NC*incColB,
-                incColB, incRowB, NR,
-                pbuf_B)
+                addr B[k*KC*incRowB + j*NC*incColB],
+                incColB, incRowB, NR, pbB)
       for i in 0 ..< mb:
         mc = if (i != mb-1 or mod_mc == 0): MC
              else: mod_mc
 
         pack_dim( mc, kc,
-                  pA + i*MC*incRowA+k*KC*incColA,
+                  addr A[i*MC*incRowA+k*KC*incColA],
                   incRowA, incColA, MR,
-                  pbuf_A)
+                  pbA)
 
         gemm_macro_kernel(mc, nc, kc,
                           alpha, tmp_beta,
-                          pC + i*MC*incRowC + j*NC*incColC,
-                          incRowC, incColC, pbuf_A, pbuf_B, pbuf_C)
+                          addr C[i*MC*incRowC + j*NC*incColC],
+                          incRowC, incColC, pbA, pbB, pbC)

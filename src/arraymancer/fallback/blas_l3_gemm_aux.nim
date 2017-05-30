@@ -15,9 +15,9 @@
 ## Compute Y += alpha * X
 proc geaxpy[T]( m, n: int,
                 alpha: T,
-                X: BufferPtr[MRNR, T],
+                X: ptr T, # Points to ref array[MRNR, T],
                 incRowX, incColX: int,
-                pY: SeqPtr[T],
+                pY: ptr T, # Points to C
                 incRowY, incColY: int) =
 
   var Y = pY
@@ -34,7 +34,7 @@ proc geaxpy[T]( m, n: int,
 ## Compute X *= alpha
 proc gescal[T]( m, n: int,
                 alpha: T,
-                pX: SeqPtr[T],
+                pX: ptr T, # Points to C
                 incRowX, incColX: int) =
   var X = pX
 

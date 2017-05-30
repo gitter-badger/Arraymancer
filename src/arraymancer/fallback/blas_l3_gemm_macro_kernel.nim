@@ -15,11 +15,11 @@
 proc gemm_macro_kernel[T](mc, nc, kc: int,
                           alpha: T,
                           beta: T,
-                          pC: SeqPtr[T],
+                          C: ptr T,
                           incRowC, incColC: int,
-                          buffer_A: BufferPtr[MCKC, T],
-                          buffer_B: BufferPtr[KCNC, T],
-                          buffer_C: var BufferPtr[MRNR, T]
+                          buffer_A: ptr T,
+                          buffer_B: ptr T,
+                          buffer_C: ptr T
                           ) = # {.noSideEffect.} =
   let mp = (mc+MR-1) div MR
   let np = (nc+NR-1) div NR
@@ -39,24 +39,24 @@ proc gemm_macro_kernel[T](mc, nc, kc: int,
 
       if (mr==MR and nr==NR):
         gemm_micro_kernel(kc, alpha,
-                          buffer_A + i*kc*MR,
-                          buffer_B + j*kc*NR,
+                          addr buffer_A[i*kc*MR],
+                          addr buffer_B[j*kc*NR],
                           beta,
-                          pC + i*MR*incRowC+j*NR*incColC,
+                          addr C[i*MR*incRowC + j*NR*incColC],
                           incRowC, incColC)
       else:
         gemm_micro_kernel(kc, alpha,
-                          buffer_A + i*kc*MR,
-                          buffer_B + j*kc*NR,
+                          addr buffer_A[i*kc*MR],
+                          addr buffer_B[j*kc*NR],
                           0.T,
                           buffer_C,
                           1, MR)
         gescal( mr, nr, beta,
-                pC + i*MR*incRowC+j*NR*incColC,
+                addr C[i*MR*incRowC + j*NR*incColC],
                 incRowC, incColC)
         geaxpy( mr, nr,
                 1.T,
                 buffer_C,
                 1, MR,
-                pC + i*MR*incRowC+j*NR*incColC,
+                addr C[i*MR*incRowC+j*NR*incColC],
                 incRowC, incColC)

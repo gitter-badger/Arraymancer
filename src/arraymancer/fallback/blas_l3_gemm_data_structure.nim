@@ -12,6 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Unsafe pointer arithmetics 
+template `+`[T](p: ptr T, off: int): ptr T =
+  cast[ptr type(p[])](cast[ByteAddress](p) +% off * sizeof(p[]))
+
+template `+=`[T](p: ptr T, off: int)  =
+  # We don't use var ptr, that would be a ptr to a ptr
+  p = p + off
+
+template `[]`[T](p: ptr T, off: int): T =
+  # var T for p[index] *= support
+  (p + off)[]
+
+template `[]=`[T](p: ptr T, off: int, val: T) =
+  (p + off)[] = val
+
+
+template get_data_ptr[N,T](ra: ref array[N, T]): ptr T = addr ra[0]
+
+proc newRefArray[T: SomeNumber](N: static[int], typ: typedesc[T]): ref array[N,T] {.noSideEffect.} =
+  new result
+  for i in 0 ..< N:
+    result[i] = 0.T
+
+
+###################################################
 # Defining Buffer array and a safe pointer to it
 type
   BufferArray[N: static[int], T] = ref array[N, T]
